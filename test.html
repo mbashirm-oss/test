@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Boron — Offline No-Backend Viewer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+:root {
+--bg: #0b0f13;
+--panel: #121820;
+--text: #e6f1ff;
+--accent: #66e0a3;
+--muted: #88a1b6;
+--danger: #ff6b6b;
+--warn: #ffd166;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+header { padding: 16px; border-bottom: 1px solid #1b2430; background: #0d131a; position: sticky; top: 0; z-index: 10; }
+h1 { margin: 0; font-size: 18px; letter-spacing: 0.02em; }
+.wrap { display: grid; grid-template-columns: 360px 1fr; gap: 16px; padding: 16px; }
+.panel { background: var(--panel); border: 1px solid #1b2430; border-radius: 10px; padding: 12px; }
+label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+input[type="text"] { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid #263245; background: #0f141b; color: var(--text); }
+textarea { width: 100%; min-height: 120px; padding: 10px; border-radius: 8px; border: 1px solid #263245; background: #0f141b; color: var(--text); resize: vertical; }
+.row { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+button { padding: 8px 12px; border: 1px solid #263245; border-radius: 8px; background: #0f141b; color: var(--text); cursor: pointer; }
+button.primary { background: #112025; border-color: #1e3a32; color: var(--accent); }
+button.warn { border-color: #3b2f1a; color: var(--warn); }
+button.danger { border-color: #3b1f1f; color: var(--danger); }
+.small { font-size: 12px; color: var(--muted); margin-top: 6px; }
+iframe { width: 100%; height: calc(100vh - 140px); border: 0; background: #0f141b; border-radius: 10px; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 999px; border: 1px solid #263245; background: #0f141b; color: var(--muted); font-size: 11px; margin-left: 8px; }
+.log { height: 140px; overflow: auto; background: #0f141b; border: 1px solid #263245; border-radius: 8px; padding: 8px; font-size: 12px; }
+.kv { display: grid; grid-template-columns: 1fr auto; gap: 6px; align-items: center; }
+.link { color: var(--accent); cursor: pointer; text-decoration: underline; }
+</style>
+</head>
+<body>
+<header>
+<h1>Boron <span class="badge">offline / no-backend</span></h1>
+</header>
+
+<div class="wrap">
+<section class="panel">
+<label for="url">Target URL (for CORS-allowed fetch or as a key)</label>
+<input type="text" id="url" placeholder="https://example.com or a custom key like example" />
+
+<div class="row">
+<button class="primary" id="btn-fetch">Attempt fetch (CORS permitting)</button>
+<button id="btn-load">Load cached snapshot</button>
+<button class="warn" id="btn-save">Save pasted HTML as snapshot</button>
+<button class="danger" id="btn-clear">Delete snapshot</button>
+</div>
+
+<p class="small">
+Notes:
+- Fetch only works if the site allows CORS.
+- For blocked sites, paste HTML into the editor below and save as a local snapshot.
+</p>
+
+<label for="html">HTML editor (manual snapshot)</label>
+<textarea id="html" placeholder="Paste HTML here to simulate a proxied page."></textarea>
+
+<label>Snapshots stored locally</label>
+<div id="storeList" class="kv"></div>
+
+<label>Activity log</label>
+<div id="log" class="log"></div>
+</section>
+
+<section class="panel">
+<label>Rendered page (sandboxed)</label>
+<iframe id="view" sandbox="allow-scripts allow-forms allow-same-origin"></iframe>
+<p class="small">
+The viewer uses <code>srcdoc</code> and a click interceptor to keep navigation inside Boron.
+External requests may be blocked by CORS and network policies.
+</p>
+</section>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const log = (msg) => {
+const t = new Date().toLocaleTimeString();
+$('log').insertAdjacentHTML('afterbegin', `<div>[${t}] ${msg}</div>`);
+};
+
+const storeKey = (key) => `boron:${key}`;
+const listStore = () => {
+const keys = Object.keys(localStorage).filter(k => k.startsWith('boron:'));
+const el = $('storeList');
+el.innerHTML = '';
+if (keys.length === 0) {
+el.innerHTML = '<div class="small">No snapshots saved.</div>';
+return;
+}
+keys.forEach(k => {
+const name = k.replace('boron:', '');
+const row = document.createElement('div');
+row.className = 'kv';
+row.innerHTML = `
+<div class="link" data-name="${name}">${name}</div>
+<div>
+<button data-load="${name}">Load</button>
+<button data-del="${name}" class="danger">Delete</button>
+</div>
+`;
+el.appendChild(row);
+});
+};
+
+const sanitize = (html) => {
+// Minimal rewrite: intercept links to keep navigation inside Boron
+const doc = new DOMParser().parseFromString(html, 'text/html');
+doc.querySelectorAll('a[href]').forEach(a => {
+const href = a.getAttribute('href');
+// rewrite to internal navigation handler
+a.setAttribute('data-boron-href', href);
+a.removeAttribute('href');
+a.style.textDecoration = 'underline';
+a.style.cursor = 'pointer';
+});
+// Ensure relative base works if possible (uses provided URL as base)
+return '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
+};
+
+const render = (html, baseUrl = '') => {
+const iframe = $('view');
+const wrapped = `
+<!DOCTYPE html>
+<html>
+<head>
+<base href="${baseUrl}">
+<meta charset="utf-8">
+<style>body{font-family:system-ui, -apple-system, Segoe UI, Roboto, sans-serif}</style>
+</head>
+<body>
+${html}
+<script>
+document.addEventListener('click', (e) => {
+let el = e.target;
+// bubble up to find data-boron-href
+while (el && el !== document.body) {
+if (el.dataset && el.dataset.boronHref) {
+e.preventDefault();
+parent.postMessage({ type: 'boron:navigate', href: el.dataset.boronHref }, '*');
+return;
+}
+el = el.parentElement;
+}
+}, true);
+</script>
+</body>
+</html>
+`;
+iframe.srcdoc = wrapped;
+};
+
+window.addEventListener('message', async (ev) => {
+if (!ev.data || ev.data.type !== 'boron:navigate') return;
+const href = ev.data.href;
+const base = $('url').value || '';
+const nextUrl = new URL(href, base).toString();
+$('url').value = nextUrl;
+log('Navigate request: ' + nextUrl);
+try {
+const res = await fetch(nextUrl, { mode: 'cors' });
+if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
+const text = await res.text();
+const safe = sanitize(text);
+render(safe, nextUrl);
+log('Fetched and rendered: ' + nextUrl);
+} catch (err) {
+log('Fetch blocked or failed: ' + err.message);
+}
+});
+
+$('btn-fetch').addEventListener('click', async () => {
+const url = $('url').value.trim();
+if (!url) { log('No URL provided.'); return; }
+log('Attempting fetch: ' + url);
+try {
+const res = await fetch(url, { mode: 'cors' });
+if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
+const text = await res.text();
+const safe = sanitize(text);
+render(safe, url);
+log('Fetched and rendered: ' + url);
+} catch (err) {
+log('Fetch blocked or failed: ' + err.message + ' — paste HTML instead.');
+}
+});
+
+$('btn-save').addEventListener('click', () => {
+const key = ($('url').value.trim() || 'snapshot').toLowerCase();
+const html = $('html').value;
+if (!html) { log('Nothing to save. Paste HTML first.'); return; }
+const safe = sanitize(html);
+localStorage.setItem(storeKey(key), JSON.stringify({ html: safe, base: $('url').value.trim() }));
+listStore();
+log('Saved snapshot under key: ' + key);
+});
+
+$('btn-load').addEventListener('click', () => {
+const key = ($('url').value.trim() || 'snapshot').toLowerCase();
+const raw = localStorage.getItem(storeKey(key));
+if (!raw) { log('No snapshot found for key: ' + key); return; }
+const { html, base } = JSON.parse(raw);
+render(html, base || '');
+log('Loaded snapshot: ' + key);
+});
+
+$('btn-clear').addEventListener('click', () => {
+const key = ($('url').value.trim() || 'snapshot').toLowerCase();
+localStorage.removeItem(storeKey(key));
+listStore();
+log('Deleted snapshot: ' + key);
+});
+
+$('storeList').addEventListener('click', (e) => {
+const load = e.target.getAttribute('data-load');
+const del = e.target.getAttribute('data-del');
+const name = e.target.getAttribute('data-name');
+if (name) $('url').value = name;
+if (load) {
+$('url').value = load;
+$('btn-load').click();
+} else if (del) {
+$('url').value = del;
+$('btn-clear').click();
+}
+});
+
+// Initialize
+listStore();
+render('<div style="padding:16px"><h2>Welcome to Boron</h2><p>Paste HTML or try a CORS-allowed URL, then save and view snapshots locally.</p></div>');
+log('Boron ready. Local-only, no backend.');
+</script>
+
+<noscript>
+<div style="padding:12px; background:#121820; color:#e6f1ff; border-top:1px solid #1b2430;">
+<strong>JavaScript required:</strong> Boron needs JS to render and manage local snapshots.
+You can still keep a text log, but interactive viewing won’t work without JS.
+</div>
+</noscript>
+</body>
+</html>
