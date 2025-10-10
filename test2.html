@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Boron Shell Test</title>
+</head>
+<body>
+  <input id="url" placeholder="Enter URL or key" />
+  <textarea id="html" placeholder="Paste HTML here"></textarea>
+  <button id="btn-fetch">Fetch</button>
+  <button id="btn-save">Save</button>
+  <button id="btn-load">Load</button>
+  <button id="btn-clear">Clear</button>
+  <iframe id="preview"></iframe>
+  <div id="logBox"></div>
+  <div id="storeList"></div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const log = (msg) => $('logBox').innerHTML += '<div>' + msg + '</div>';
+    const sanitize = (html) => html.replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '');
+    const storeKey = (key) => `boron:snapshot:${key}`;
+    const render = (html) => $('preview').srcdoc = html;
+
+    $('btn-fetch').addEventListener('click', async () => {
+      const url = $('url').value.trim();
+      if (!url) return log('No URL provided.');
+      try {
+        const res = await fetch(url);
+        const text = await res.text();
+        render(sanitize(text));
+        log('Rendered: ' + url);
+      } catch (err) {
+        log('Fetch failed: ' + err.message);
+      }
+    });
+
+    $('btn-save').addEventListener('click', () => {
+      const key = $('url').value.trim();
+      const html = $('html').value;
+      if (!html) return log('Nothing to save.');
+      localStorage.setItem(storeKey(key), JSON.stringify({ html }));
+      log('Saved: ' + key);
+    });
+
+    $('btn-load').addEventListener('click', () => {
+      const key = $('url').value.trim();
+      const raw = localStorage.getItem(storeKey(key));
+      if (!raw) return log('Not found: ' + key);
+      const { html } = JSON.parse(raw);
+      render(html);
+      log('Loaded: ' + key);
+    });
+
+    $('btn-clear').addEventListener('click', () => {
+      const key = $('url').value.trim();
+      localStorage.removeItem(storeKey(key));
+      log('Deleted: ' + key);
+    });
+  </script>
+</body>
+</html>
