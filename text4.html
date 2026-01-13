@@ -23,12 +23,15 @@
     z-index: 10;
   }
 
+  /* COUNTDOWN IN TOP‑RIGHT */
   #countdown {
     color: white;
-    font-size: 120px;
+    font-size: 80px;
     font-family: Arial, sans-serif;
     text-shadow: 0 0 20px rgba(255,255,255,0.8);
     position: absolute;
+    top: 10px;
+    right: 20px;
     opacity: 0;
     transition: opacity 0.1s;
     z-index: 6;
@@ -55,6 +58,7 @@
     z-index: 7;
   }
 
+  /* ANIMATED SCANLINES */
   #scanlines {
     position: absolute;
     width: 100vw;
@@ -69,6 +73,12 @@
     );
     opacity: 0.25;
     z-index: 4;
+    animation: scanMove 0.2s linear infinite;
+  }
+
+  @keyframes scanMove {
+    from { background-position-y: 0; }
+    to   { background-position-y: 4px; }
   }
 
   #thanks {
@@ -118,44 +128,36 @@
     video.src = URL.createObjectURL(file);
     fileInput.style.display = "none";
 
-    // Wait for metadata so we know duration
     video.addEventListener("loadedmetadata", () => {
-      let total = Math.floor(video.duration);
+      video.style.display = "block";
+      video.requestFullscreen();
+      video.play();
 
-      countdown.textContent = total;
       countdown.style.opacity = 1;
 
       const tick = setInterval(() => {
-        let remaining = Math.floor(total - video.currentTime);
+        let remaining = Math.floor(video.duration - video.currentTime);
+
         countdown.textContent = remaining;
 
-        // Static flicker
         staticFx.style.opacity = Math.random() * 0.4;
 
-        // Flash effect each tick
         countdown.style.opacity = "0";
         setTimeout(() => countdown.style.opacity = "1", 100);
 
-        // Red flash on last second
         if (remaining === 1) {
           flash.style.opacity = 1;
           setTimeout(() => flash.style.opacity = 0, 150);
         }
 
-        // When countdown hits 0
         if (remaining <= 0) {
           clearInterval(tick);
           countdown.style.display = "none";
           staticFx.style.display = "none";
-
-          video.style.display = "block";
-          video.requestFullscreen();
-          video.play();
         }
       }, 250);
     });
 
-    // When video ends → fade message
     video.addEventListener("ended", () => {
       thanks.style.opacity = 1;
     });
