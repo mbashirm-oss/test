@@ -95,7 +95,7 @@
 
 <input id="fileInput" type="file" accept="video/*">
 
-<div id="countdown">5</div>
+<div id="countdown">0</div>
 <div id="static"></div>
 <div id="flash"></div>
 <div id="scanlines"></div>
@@ -118,38 +118,47 @@
     video.src = URL.createObjectURL(file);
     fileInput.style.display = "none";
 
-    let timeLeft = 5;
-    countdown.style.opacity = 1;
+    // Wait for metadata so we know duration
+    video.addEventListener("loadedmetadata", () => {
+      let total = Math.floor(video.duration);
 
-    const tick = setInterval(() => {
-      timeLeft--;
-      countdown.textContent = timeLeft;
+      countdown.textContent = total;
+      countdown.style.opacity = 1;
 
-      staticFx.style.opacity = Math.random() * 0.4;
+      const tick = setInterval(() => {
+        let remaining = Math.floor(total - video.currentTime);
+        countdown.textContent = remaining;
 
-      countdown.style.opacity = "0";
-      setTimeout(() => countdown.style.opacity = "1", 100);
+        // Static flicker
+        staticFx.style.opacity = Math.random() * 0.4;
 
-      if (timeLeft === 1) {
-        flash.style.opacity = 1;
-        setTimeout(() => flash.style.opacity = 0, 150);
-      }
+        // Flash effect each tick
+        countdown.style.opacity = "0";
+        setTimeout(() => countdown.style.opacity = "1", 100);
 
-      if (timeLeft <= 0) {
-        clearInterval(tick);
+        // Red flash on last second
+        if (remaining === 1) {
+          flash.style.opacity = 1;
+          setTimeout(() => flash.style.opacity = 0, 150);
+        }
 
-        countdown.style.display = "none";
-        staticFx.style.display = "none";
+        // When countdown hits 0
+        if (remaining <= 0) {
+          clearInterval(tick);
+          countdown.style.display = "none";
+          staticFx.style.display = "none";
 
-        video.style.display = "block";
-        video.requestFullscreen();
-        video.play();
+          video.style.display = "block";
+          video.requestFullscreen();
+          video.play();
+        }
+      }, 250);
+    });
 
-        video.addEventListener("ended", () => {
-          thanks.style.opacity = 1;
-        });
-      }
-    }, 1000);
+    // When video ends → fade message
+    video.addEventListener("ended", () => {
+      thanks.style.opacity = 1;
+    });
   });
 </script>
 
