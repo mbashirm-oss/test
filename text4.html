@@ -1,143 +1,274 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>FNaF‑Style Ending</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Volume Booster Video Player + FNaF Mode</title>
 
-<style>
-  body {
-    margin: 0;
-    background: black;
-    overflow: hidden;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100vh;
-    flex-direction: column;
-  }
+    <style>
+        :root {
+            --bg-color: #09090b;
+            --card-bg: #18181b;
+            --text-color: #fafafa;
+            --accent-color: #2563eb;
+            --border-color: #27272a;
+        }
 
-  #fileInput {
-    color: white;
-    font-size: 20px;
-    margin-bottom: 20px;
-    z-index: 10;
-  }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
 
-  /* COUNTDOWN IN TOP‑RIGHT */
-  #countdown {
-    color: white;
-    font-size: 80px;
-    font-family: Arial, sans-serif;
-    text-shadow: 0 0 20px rgba(255,255,255,0.8);
-    position: absolute;
-    top: 10px;
-    right: 20px;
-    opacity: 0;
-    transition: opacity 0.1s;
-    z-index: 6;
-  }
+        .container {
+            width: 90%;
+            max-width: 1000px;
+            background-color: var(--card-bg);
+            padding: 2rem;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+        }
 
-  #static {
-    position: absolute;
-    width: 100vw;
-    height: 100vh;
-    background: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIW2NkYGD4DwABAgEAffNkWQAAAABJRU5ErkJggg==');
-    opacity: 0;
-    pointer-events: none;
-    z-index: 3;
-  }
+        .upload-area {
+            border: 2px dashed var(--border-color);
+            border-radius: 8px;
+            padding: 2rem;
+            text-align: center;
+            margin-bottom: 2rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
 
-  #flash {
-    position: absolute;
-    width: 100vw;
-    height: 100vh;
-    background: red;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.15s;
-    z-index: 7;
-  }
+        .upload-area:hover {
+            border-color: var(--accent-color);
+            background-color: rgba(37, 99, 235, 0.1);
+        }
 
-  /* ANIMATED SCANLINES */
-  #scanlines {
-    position: absolute;
-    width: 100vw;
-    height: 100vh;
-    pointer-events: none;
-    background: repeating-linear-gradient(
-      to bottom,
-      rgba(255,255,255,0.05) 0px,
-      rgba(255,255,255,0.05) 2px,
-      rgba(0,0,0,0) 2px,
-      rgba(0,0,0,0) 4px
-    );
-    opacity: 0.25;
-    z-index: 4;
-    animation: scanMove 0.2s linear infinite;
-  }
+        input[type="file"] { display: none; }
 
-  @keyframes scanMove {
-    from { background-position-y: 0; }
-    to   { background-position-y: 4px; }
-  }
+        .video-container {
+            width: 100%;
+            background: black;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-bottom: 1.5rem;
+            display: none;
+            position: relative;
+        }
 
-  #thanks {
-    position: absolute;
-    color: white;
-    font-size: 48px;
-    font-family: Arial, sans-serif;
-    opacity: 0;
-    transition: opacity 2s;
-    z-index: 8;
-  }
+        video { width: 100%; display: block; }
 
-  #video {
-    width: 100vw;
-    height: 100vh;
-    object-fit: cover;
-    display: none;
-    z-index: 2;
-  }
-</style>
+        .controls {
+            display: none;
+            gap: 1.5rem;
+            align-items: center;
+            padding: 1rem;
+            background-color: #27272a;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+
+        .btn {
+            background-color: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 0.7rem 1rem;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 1rem;
+        }
+
+        /* FNaF MODE OVERLAYS */
+        #countdown {
+            position: fixed;
+            top: 10px;
+            right: 20px;
+            font-size: 80px;
+            color: white;
+            text-shadow: 0 0 20px rgba(255,255,255,0.8);
+            opacity: 0;
+            transition: opacity 0.1s;
+            z-index: 9999;
+            pointer-events: none;
+        }
+
+        #staticFx {
+            position: fixed;
+            width: 100vw;
+            height: 100vh;
+            background: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIW2NkYGD4DwABAgEAffNkWQAAAABJRU5ErkJggg==');
+            opacity: 0;
+            pointer-events: none;
+            z-index: 9997;
+        }
+
+        #flashFx {
+            position: fixed;
+            width: 100vw;
+            height: 100vh;
+            background: red;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.15s;
+            z-index: 9998;
+        }
+
+        #scanlines {
+            position: fixed;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none;
+            background: repeating-linear-gradient(
+                to bottom,
+                rgba(255,255,255,0.05) 0px,
+                rgba(255,255,255,0.05) 2px,
+                rgba(0,0,0,0) 2px,
+                rgba(0,0,0,0) 4px
+            );
+            opacity: 0.25;
+            z-index: 9996;
+            animation: scanMove 0.2s linear infinite;
+        }
+
+        @keyframes scanMove {
+            from { background-position-y: 0; }
+            to { background-position-y: 4px; }
+        }
+
+        #thanks {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 48px;
+            color: white;
+            opacity: 0;
+            transition: opacity 2s;
+            z-index: 9999;
+            pointer-events: none;
+        }
+
+        /* Jumpscare Flash */
+        #jumpscareFx {
+            position: fixed;
+            width: 100vw;
+            height: 100vh;
+            background: white;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.1s;
+            z-index: 10000;
+        }
+    </style>
 </head>
-
 <body>
 
-<input id="fileInput" type="file" accept="video/*">
+<div class="container">
+    <h1>🔊 Volume Booster Player</h1>
 
+    <div class="upload-area" id="dropZone" onclick="fileInput.click()">
+        <p>Click or drag video file here</p>
+        <input type="file" id="fileInput" accept="video/*">
+    </div>
+
+    <div class="video-container" id="videoContainer">
+        <video id="videoPlayer" controls playsinline></video>
+    </div>
+
+    <div class="controls" id="controls">
+        <div class="control-group">
+            <label>Volume Boost: <span id="volumeValue">100%</span></label>
+            <input type="range" id="volumeSlider" min="0" max="4" step="0.1" value="1">
+        </div>
+    </div>
+
+    <button class="btn" id="fnafBtn" style="display:none;">Play FNaF Ending Mode</button>
+</div>
+
+<!-- FNaF MODE OVERLAYS -->
 <div id="countdown">0</div>
-<div id="static"></div>
-<div id="flash"></div>
+<div id="staticFx"></div>
+<div id="flashFx"></div>
 <div id="scanlines"></div>
 <div id="thanks">Thank you for playing</div>
-
-<video id="video"></video>
+<div id="jumpscareFx"></div>
 
 <script>
-  const fileInput = document.getElementById("fileInput");
-  const countdown = document.getElementById("countdown");
-  const video = document.getElementById("video");
-  const staticFx = document.getElementById("static");
-  const flash = document.getElementById("flash");
-  const thanks = document.getElementById("thanks");
+/* --------------------------
+   NORMAL PLAYER LOGIC
+--------------------------- */
+const fileInput = document.getElementById("fileInput");
+const videoPlayer = document.getElementById("videoPlayer");
+const videoContainer = document.getElementById("videoContainer");
+const controls = document.getElementById("controls");
+const volumeSlider = document.getElementById("volumeSlider");
+const volumeValue = document.getElementById("volumeValue");
+const fnafBtn = document.getElementById("fnafBtn");
 
-  fileInput.addEventListener("change", () => {
-    const file = fileInput.files[0];
+let audioCtx, source, gainNode;
+
+function initAudio() {
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        source = audioCtx.createMediaElementSource(videoPlayer);
+        gainNode = audioCtx.createGain();
+        source.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+    }
+    if (audioCtx.state === "suspended") audioCtx.resume();
+}
+
+fileInput.addEventListener("change", e => {
+    const file = e.target.files[0];
     if (!file) return;
 
-    video.src = URL.createObjectURL(file);
-    fileInput.style.display = "none";
+    videoPlayer.src = URL.createObjectURL(file);
+    videoContainer.style.display = "block";
+    controls.style.display = "flex";
+    fnafBtn.style.display = "block";
+});
 
-    video.addEventListener("loadedmetadata", () => {
-      video.style.display = "block";
-      video.requestFullscreen();
-      video.play();
+volumeSlider.addEventListener("input", e => {
+    const v = parseFloat(e.target.value);
+    volumeValue.textContent = Math.round(v * 100) + "%";
+    if (gainNode) gainNode.gain.value = v;
+});
 
-      countdown.style.opacity = 1;
+videoPlayer.addEventListener("play", initAudio);
 
-      const tick = setInterval(() => {
-        let remaining = Math.floor(video.duration - video.currentTime);
+/* --------------------------
+   FNaF MODE LOGIC
+--------------------------- */
+const countdown = document.getElementById("countdown");
+const staticFx = document.getElementById("staticFx");
+const flashFx = document.getElementById("flashFx");
+const thanks = document.getElementById("thanks");
+const jumpscareFx = document.getElementById("jumpscareFx");
 
+fnafBtn.addEventListener("click", () => {
+
+    // Jumpscare flash
+    jumpscareFx.style.opacity = 1;
+    setTimeout(() => {
+        jumpscareFx.style.opacity = 0;
+    }, 120);
+
+    videoPlayer.requestFullscreen();
+    videoPlayer.play();
+
+    countdown.style.opacity = 1;
+
+    const tick = setInterval(() => {
+        let remaining = Math.floor(videoPlayer.duration - videoPlayer.currentTime);
         countdown.textContent = remaining;
 
         staticFx.style.opacity = Math.random() * 0.4;
@@ -146,22 +277,21 @@
         setTimeout(() => countdown.style.opacity = "1", 100);
 
         if (remaining === 1) {
-          flash.style.opacity = 1;
-          setTimeout(() => flash.style.opacity = 0, 150);
+            flashFx.style.opacity = 1;
+            setTimeout(() => flashFx.style.opacity = 0, 150);
         }
 
         if (remaining <= 0) {
-          clearInterval(tick);
-          countdown.style.display = "none";
-          staticFx.style.display = "none";
+            clearInterval(tick);
+            countdown.style.display = "none";
+            staticFx.style.display = "none";
         }
-      }, 250);
-    });
+    }, 250);
+});
 
-    video.addEventListener("ended", () => {
-      thanks.style.opacity = 1;
-    });
-  });
+videoPlayer.addEventListener("ended", () => {
+    thanks.style.opacity = 1;
+});
 </script>
 
 </body>
